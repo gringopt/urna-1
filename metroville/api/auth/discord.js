@@ -1,29 +1,40 @@
-import crypto from "crypto";
+
+import crypto from "node:crypto";
 import { serialize } from "cookie";
 
-export default async function handler(req, res) {
+export default function handler(req, res) {
+  const clientId = process.env.DISCORD_CLIENT_ID;
+  const redirectUri = process.env.DISCORD_REDIRECT_URI;
+
+  if (!clientId || !redirectUri) {
+    return res.status(500).json({
+      error: "Configuração Discord incompleta."
+    });
+  }
+
   const state = crypto.randomBytes(24).toString("hex");
 
   res.setHeader(
     "Set-Cookie",
     serialize("discord_oauth_state", state, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
       sameSite: "lax",
       path: "/",
-      maxAge: 600,
+      maxAge: 600
     })
   );
 
   const params = new URLSearchParams({
-    client_id: process.env.DISCORD_CLIENT_ID,
+    client_id: clientId,
+    redirect_uri: redirectUri,
     response_type: "code",
-    redirect_uri: process.env.DISCORD_REDIRECT_URI,
     scope: "identify",
-    state,
+    state: state
   });
 
-  res.redirect(
-    `https://discord.com/oauth2/authorize?${params.toString()}`
+  return res.redirect(
+    "https://discord.com/oauth2/authorize?" +
+    params.toString()
   );
 }
