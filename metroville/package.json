@@ -1,0 +1,15 @@
+{
+  "name": "metroville-eleitoral",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node -e \"console.log('Deploy na Vercel')\""
+  },
+  "dependencies": {
+    "cookie": "^1.0.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.3",
+    "@vercel/blob": "^2.0.0"
+  }
+}
