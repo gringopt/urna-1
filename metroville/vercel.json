@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "cleanUrls": true,
+  "functions": {
+    "api/candidacy/document.js": {
+      "includeFiles": "lib/termo-responsabilidade.pdf"
+    }
+  }
+}
