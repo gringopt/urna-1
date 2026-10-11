@@ -14,16 +14,19 @@ const OFFICES = [
 ];
 
 const LABELS = {
-  'Senador': 'Senador',
+  Senador: 'Senador',
   'Dep Estadual': 'Deputado Estadual',
   'Dep Federal': 'Deputado Federal',
-  'Governador': 'Governador',
-  'Presidente': 'Presidente'
+  Governador: 'Governador',
+  Presidente: 'Presidente'
 };
 
 export default async function handler(req, res) {
 
+  // ==========================================
   // PORTAL DO CIDADÃO
+  // ==========================================
+
   if (
     req.query?.view === 'portal' ||
     req.body?.action === 'portal'
@@ -43,19 +46,28 @@ export default async function handler(req, res) {
           candidates,
           ownRequests
         ] = await Promise.all([
-          query(`SELECT id,kind,title,body,event_at,created_at
-                 FROM civic_publications
-                 ORDER BY created_at DESC,id DESC LIMIT 100`),
-          query(`SELECT value FROM portal_settings
-                 WHERE key='results_public'`),
-          query(`SELECT id,name,number,office,photo_url,
-                        party,biography,proposals,discord_id,signed_at
-                 FROM candidates WHERE active=TRUE
-                 ORDER BY office,number`),
-          query(`SELECT id,category,subject,message,status,created_at
-                 FROM citizen_requests
-                 WHERE author_discord_id=$1
-                 ORDER BY id DESC LIMIT 30`, [session.discordId])
+          query(`
+            SELECT id,kind,title,body,event_at,created_at
+            FROM civic_publications
+            ORDER BY created_at DESC,id DESC LIMIT 100
+          `),
+          query(`
+            SELECT value FROM portal_settings
+            WHERE key='results_public'
+          `),
+          query(`
+            SELECT id,name,number,office,photo_url,
+                   party,biography,proposals,discord_id,signed_at
+            FROM candidates
+            WHERE active=TRUE
+            ORDER BY office,number
+          `),
+          query(`
+            SELECT id,category,subject,message,status,created_at
+            FROM citizen_requests
+            WHERE author_discord_id=$1
+            ORDER BY id DESC LIMIT 30
+          `, [session.discordId])
         ]);
 
         const result = {
@@ -64,7 +76,7 @@ export default async function handler(req, res) {
           candidates: candidates.rows.map(c => ({
             ...c,
             discord_id:
-              owner || c.discord_id === session.discordId
+              owner || String(c.discord_id) === String(session.discordId)
                 ? c.discord_id
                 : null
           })),
@@ -74,13 +86,17 @@ export default async function handler(req, res) {
 
         if (owner) {
           const [requests, audit] = await Promise.all([
-            query(`SELECT id,author_discord_id,category,
-                          subject,message,status,created_at
-                   FROM citizen_requests
-                   ORDER BY id DESC LIMIT 100`),
-            query(`SELECT actor_discord_id,action,details,created_at
-                   FROM government_audit
-                   ORDER BY id DESC LIMIT 80`)
+            query(`
+              SELECT id,author_discord_id,category,
+                     subject,message,status,created_at
+              FROM citizen_requests
+              ORDER BY id DESC LIMIT 100
+            `),
+            query(`
+              SELECT actor_discord_id,action,details,created_at
+              FROM government_audit
+              ORDER BY id DESC LIMIT 80
+            `)
           ]);
 
           result.requests = requests.rows;
@@ -124,12 +140,11 @@ export default async function handler(req, res) {
           });
         }
 
-        await query(
-          `INSERT INTO citizen_requests
-           (author_discord_id,category,subject,message)
-           VALUES($1,$2,$3,$4)`,
-          [actor, category, subject, message]
-        );
+        await query(`
+          INSERT INTO citizen_requests
+          (author_discord_id,category,subject,message)
+          VALUES($1,$2,$3,$4)
+        `, [actor, category, subject, message]);
 
         return res.json({ ok: true });
       }
@@ -143,11 +158,11 @@ export default async function handler(req, res) {
           });
         }
 
-        const found = await query(
-          `SELECT discord_id FROM candidates
-           WHERE id=$1 AND active=TRUE`,
-          [id]
-        );
+        const found = await query(`
+          SELECT discord_id
+          FROM candidates
+          WHERE id=$1 AND active=TRUE
+        `, [id]);
 
         if (!found.rowCount) {
           return res.status(404).json({
@@ -168,19 +183,17 @@ export default async function handler(req, res) {
         const biography = str('biography', 2000);
         const proposals = str('proposals', 5000);
 
-        await query(
-          `UPDATE candidates
-           SET party=$2,biography=$3,proposals=$4
-           WHERE id=$1`,
-          [id, party, biography, proposals]
-        );
+        await query(`
+          UPDATE candidates
+          SET party=$2,biography=$3,proposals=$4
+          WHERE id=$1
+        `, [id, party, biography, proposals]);
 
-        await query(
-          `INSERT INTO government_audit
-           (actor_discord_id,action,details)
-           VALUES($1,'profile_updated',$2)`,
-          [actor, String(id)]
-        );
+        await query(`
+          INSERT INTO government_audit
+          (actor_discord_id,action,details)
+          VALUES($1,'profile_updated',$2)
+        `, [actor, String(id)]);
 
         return res.json({ ok: true });
       }
@@ -216,19 +229,17 @@ export default async function handler(req, res) {
           });
         }
 
-        await query(
-          `INSERT INTO civic_publications
-           (kind,title,body,event_at,author_discord_id)
-           VALUES($1,$2,$3,$4,$5)`,
-          [kind, title, body, eventAt, actor]
-        );
+        await query(`
+          INSERT INTO civic_publications
+          (kind,title,body,event_at,author_discord_id)
+          VALUES($1,$2,$3,$4,$5)
+        `, [kind, title, body, eventAt, actor]);
 
-        await query(
-          `INSERT INTO government_audit
-           (actor_discord_id,action,details)
-           VALUES($1,'publication_created',$2)`,
-          [actor, kind + ': ' + title]
-        );
+        await query(`
+          INSERT INTO government_audit
+          (actor_discord_id,action,details)
+          VALUES($1,'publication_created',$2)
+        `, [actor, kind + ': ' + title]);
 
         return res.json({ ok: true });
       }
@@ -247,17 +258,17 @@ export default async function handler(req, res) {
           });
         }
 
-        await query(
-          `UPDATE citizen_requests SET status=$2 WHERE id=$1`,
-          [id, status]
-        );
+        await query(`
+          UPDATE citizen_requests
+          SET status=$2
+          WHERE id=$1
+        `, [id, status]);
 
-        await query(
-          `INSERT INTO government_audit
-           (actor_discord_id,action,details)
-           VALUES($1,'request_status',$2)`,
-          [actor, String(id) + ': ' + status]
-        );
+        await query(`
+          INSERT INTO government_audit
+          (actor_discord_id,action,details)
+          VALUES($1,'request_status',$2)
+        `, [actor, String(id) + ': ' + status]);
 
         return res.json({ ok: true });
       }
@@ -267,18 +278,17 @@ export default async function handler(req, res) {
           ? 'true'
           : 'false';
 
-        await query(
-          `UPDATE portal_settings SET value=$1
-           WHERE key='results_public'`,
-          [value]
-        );
+        await query(`
+          UPDATE portal_settings
+          SET value=$1
+          WHERE key='results_public'
+        `, [value]);
 
-        await query(
-          `INSERT INTO government_audit
-           (actor_discord_id,action,details)
-           VALUES($1,'results_visibility',$2)`,
-          [actor, value]
-        );
+        await query(`
+          INSERT INTO government_audit
+          (actor_discord_id,action,details)
+          VALUES($1,'results_visibility',$2)
+        `, [actor, value]);
 
         return res.json({ ok: true });
       }
@@ -295,7 +305,10 @@ export default async function handler(req, res) {
     }
   }
 
+  // ==========================================
   // PAINEL GOVERNAMENTAL E DEBATES
+  // ==========================================
+
   if (
     req.query?.view === 'government' ||
     req.query?.view === 'debate' ||
@@ -318,13 +331,21 @@ export default async function handler(req, res) {
         req.query.view === 'government'
       ) {
         const [history, state, counts] = await Promise.all([
-          query(`SELECT election_number,results,announced_at
-                 FROM election_history
-                 ORDER BY id DESC LIMIT 20`),
-          query(`SELECT round,voting_open
-                 FROM election_state WHERE id=1`),
-          query(`SELECT COUNT(*)::int AS n
-                 FROM candidates WHERE active=TRUE`)
+          query(`
+            SELECT election_number,results,announced_at
+            FROM election_history
+            ORDER BY id DESC LIMIT 20
+          `),
+          query(`
+            SELECT round,voting_open
+            FROM election_state
+            WHERE id=1
+          `),
+          query(`
+            SELECT COUNT(*)::int AS n
+            FROM candidates
+            WHERE active=TRUE
+          `)
         ]);
 
         return res.status(200).json({
@@ -338,12 +359,13 @@ export default async function handler(req, res) {
         req.method === 'GET' &&
         req.query.view === 'debate'
       ) {
-        const rows = await query(
-          `SELECT slot,candidate_name,remaining_ms,ends_at,
-                  ROUND(EXTRACT(EPOCH FROM NOW())*1000)::bigint
-                  AS server_now
-           FROM debate_timers ORDER BY slot`
-        );
+        const rows = await query(`
+          SELECT slot,candidate_name,remaining_ms,ends_at,
+                 ROUND(EXTRACT(EPOCH FROM NOW())*1000)::bigint
+                 AS server_now
+          FROM debate_timers
+          ORDER BY slot
+        `);
 
         return res.status(200).json({
           timers: rows.rows
@@ -379,14 +401,14 @@ export default async function handler(req, res) {
         await client.query('BEGIN');
 
         const current = (
-          await client.query(
-            `SELECT *,
-                    ROUND(EXTRACT(EPOCH FROM NOW())*1000)::bigint
-                    AS server_now
-             FROM debate_timers
-             WHERE slot=$1 FOR UPDATE`,
-            [slot]
-          )
+          await client.query(`
+            SELECT *,
+                   ROUND(EXTRACT(EPOCH FROM NOW())*1000)::bigint
+                   AS server_now
+            FROM debate_timers
+            WHERE slot=$1
+            FOR UPDATE
+          `, [slot])
         ).rows[0];
 
         if (!current) {
@@ -404,34 +426,36 @@ export default async function handler(req, res) {
           : current.remaining_ms;
 
         if (op === 'start') {
-          await client.query(
-            `UPDATE debate_timers
-             SET remaining_ms=$2::integer,
-                 ends_at=NOW()+($2::double precision *
-                 INTERVAL '1 millisecond'),
-                 updated_at=NOW()
-             WHERE slot=$1`,
-            [slot, remaining]
-          );
+          await client.query(`
+            UPDATE debate_timers
+            SET remaining_ms=$2::integer,
+                ends_at=NOW()+(
+                  $2::double precision *
+                  INTERVAL '1 millisecond'
+                ),
+                updated_at=NOW()
+            WHERE slot=$1
+          `, [slot, remaining]);
         }
 
         if (op === 'pause') {
-          await client.query(
-            `UPDATE debate_timers
-             SET remaining_ms=$2,ends_at=NULL,updated_at=NOW()
-             WHERE slot=$1`,
-            [slot, remaining]
-          );
+          await client.query(`
+            UPDATE debate_timers
+            SET remaining_ms=$2,
+                ends_at=NULL,
+                updated_at=NOW()
+            WHERE slot=$1
+          `, [slot, remaining]);
         }
 
         if (op === 'reset') {
-          await client.query(
-            `UPDATE debate_timers
-             SET remaining_ms=300000,
-                 ends_at=NULL,updated_at=NOW()
-             WHERE slot=$1`,
-            [slot]
-          );
+          await client.query(`
+            UPDATE debate_timers
+            SET remaining_ms=300000,
+                ends_at=NULL,
+                updated_at=NOW()
+            WHERE slot=$1
+          `, [slot]);
         }
 
         if (op === 'rename') {
@@ -444,12 +468,12 @@ export default async function handler(req, res) {
             });
           }
 
-          await client.query(
-            `UPDATE debate_timers
-             SET candidate_name=$2,updated_at=NOW()
-             WHERE slot=$1`,
-            [slot, name]
-          );
+          await client.query(`
+            UPDATE debate_timers
+            SET candidate_name=$2,
+                updated_at=NOW()
+            WHERE slot=$1
+          `, [slot, name]);
         }
 
         await client.query('COMMIT');
@@ -471,23 +495,27 @@ export default async function handler(req, res) {
     }
   }
 
-  // ESTADO DA ELEIÇÃO
+  // ==========================================
+  // ESTADO PÚBLICO DA ELEIÇÃO
+  // ==========================================
+
   if (req.method === 'GET') {
     res.setHeader('Cache-Control', 'no-store');
 
     try {
-      const result = await query(
-        `SELECT round,voting_open,announced_at
-         FROM election_state WHERE id=1`
-      );
+      const result = await query(`
+        SELECT round,voting_open,announced_at
+        FROM election_state
+        WHERE id=1
+      `);
 
       const state = result.rows[0];
 
-      const pending = await query(
-        `SELECT COUNT(*)::int AS n
-         FROM candidates
-         WHERE active=TRUE AND signed_at IS NULL`
-      );
+      const pending = await query(`
+        SELECT COUNT(*)::int AS n
+        FROM candidates
+        WHERE active=TRUE AND signed_at IS NULL
+      `);
 
       return res.status(200).json({
         round: state.round,
@@ -504,7 +532,10 @@ export default async function handler(req, res) {
     }
   }
 
-  // GESTÃO DA ELEIÇÃO
+  // ==========================================
+  // AUTENTICAÇÃO ADMINISTRATIVA
+  // ==========================================
+
   if (req.method !== 'POST') {
     return res.status(405).json({
       error: 'Método não permitido.'
@@ -560,18 +591,25 @@ export default async function handler(req, res) {
     await client.query('BEGIN');
     transaction = true;
 
-    await client.query(
-      'SELECT id FROM election_state WHERE id=1 FOR UPDATE'
-    );
+    await client.query(`
+      SELECT id
+      FROM election_state
+      WHERE id=1
+      FOR UPDATE
+    `);
 
     const state = (
-      await client.query(
-        `SELECT round,announced_at,voting_open
-         FROM election_state WHERE id=1`
-      )
+      await client.query(`
+        SELECT round,announced_at,voting_open
+        FROM election_state
+        WHERE id=1
+      `)
     ).rows[0];
 
-    // ABRIR OU FECHAR VOTAÇÃO
+    // ========================================
+    // ABRIR / FECHAR VOTAÇÃO
+    // ========================================
+
     if (action === 'open' || action === 'close') {
 
       if (action === 'open' && state.announced_at) {
@@ -581,40 +619,40 @@ export default async function handler(req, res) {
       }
 
       if (action === 'open') {
-        const pending = await client.query(
-          `SELECT id,name,office,discord_id
-           FROM candidates
-           WHERE active=TRUE AND signed_at IS NULL
-           ORDER BY office,name`
-        );
+        const pending = await client.query(`
+          SELECT id,name,office,discord_id
+          FROM candidates
+          WHERE active=TRUE AND signed_at IS NULL
+          ORDER BY office,name
+        `);
 
         if (pending.rowCount) {
           return res.status(409).json({
-            error: `Existem ${pending.rowCount} candidatura(s) pendente(s) de assinatura. Não é possível abrir a votação.`,
+            error: `Existem ${pending.rowCount} candidatura(s) pendente(s) de assinatura.`,
             pending: pending.rows
           });
         }
 
-        const total = await client.query(
-          `SELECT COUNT(*)::int AS n
-           FROM candidates
-           WHERE active=TRUE AND signed_at IS NOT NULL`
-        );
+        const total = await client.query(`
+          SELECT COUNT(*)::int AS n
+          FROM candidates
+          WHERE active=TRUE AND signed_at IS NOT NULL
+        `);
 
         if (total.rows[0].n === 0) {
           return res.status(409).json({
-            error: 'Regista e oficializa pelo menos uma candidatura antes de abrir a votação.'
+            error: 'Regista pelo menos uma candidatura antes de abrir a votação.'
           });
         }
       }
 
       const votingOpen = action === 'open';
 
-      await client.query(
-        `UPDATE election_state
-         SET voting_open=$1 WHERE id=1`,
-        [votingOpen]
-      );
+      await client.query(`
+        UPDATE election_state
+        SET voting_open=$1
+        WHERE id=1
+      `, [votingOpen]);
 
       await client.query('COMMIT');
       transaction = false;
@@ -626,19 +664,24 @@ export default async function handler(req, res) {
       });
     }
 
+    // ========================================
     // REINICIAR VOTOS
+    // ========================================
+
     if (action === 'reset') {
-      const count = await client.query(
-        'SELECT COUNT(*)::int AS count FROM votes'
-      );
+      const count = await client.query(`
+        SELECT COUNT(*)::int AS count FROM votes
+      `);
 
       await client.query('DELETE FROM votes');
 
-      await client.query(
-        `UPDATE election_state
-         SET round=1,announced_at=NULL,voting_open=FALSE
-         WHERE id=1`
-      );
+      await client.query(`
+        UPDATE election_state
+        SET round=1,
+            announced_at=NULL,
+            voting_open=FALSE
+        WHERE id=1
+      `);
 
       await client.query('COMMIT');
       transaction = false;
@@ -650,7 +693,10 @@ export default async function handler(req, res) {
       });
     }
 
-    // ANUNCIAR GOVERNO
+    // ========================================
+    // ANUNCIAR NOVO GOVERNO
+    // ========================================
+
     if (state.voting_open) {
       return res.status(409).json({
         error: 'Fecha a votação antes de anunciar o governo.'
@@ -658,36 +704,37 @@ export default async function handler(req, res) {
     }
 
     const pending = (
-      await client.query(
-        `SELECT COUNT(*)::int AS n
-         FROM candidates
-         WHERE active=TRUE AND signed_at IS NULL`
-      )
+      await client.query(`
+        SELECT COUNT(*)::int AS n
+        FROM candidates
+        WHERE active=TRUE AND signed_at IS NULL
+      `)
     ).rows[0].n;
 
     if (pending) {
       return res.status(409).json({
-        error: 'Existem candidaturas pendentes de assinatura. Não é possível anunciar o governo.'
+        error: 'Existem candidaturas pendentes de assinatura.'
       });
     }
 
     if (state.announced_at) {
       return res.status(409).json({
-        error: 'O governo desta eleição já foi anunciado. Reinicia a votação para começar uma nova eleição.'
+        error: 'O governo desta eleição já foi anunciado.'
       });
     }
 
-    const result = await client.query(
-      `SELECT c.id,c.name,c.number,c.office,c.discord_id,
-              COUNT(v.id)::int AS votes
-       FROM candidates c
-       LEFT JOIN votes v
-         ON v.candidate_id=c.id
-         AND v.blank_vote=FALSE
-       WHERE c.active=TRUE
-         AND c.signed_at IS NOT NULL
-       GROUP BY c.id,c.name,c.number,c.office,c.discord_id`
-    );
+    const result = await client.query(`
+      SELECT c.id,c.name,c.number,c.office,c.discord_id,
+             COUNT(v.id)::int AS votes
+      FROM candidates c
+      LEFT JOIN votes v
+        ON v.candidate_id=c.id
+        AND v.blank_vote=FALSE
+      WHERE c.active=TRUE
+        AND c.signed_at IS NOT NULL
+      GROUP BY
+        c.id,c.name,c.number,c.office,c.discord_id
+    `);
 
     const winners = [];
     const ties = [];
@@ -728,16 +775,19 @@ export default async function handler(req, res) {
         error:
           'Não é possível anunciar: ' +
           (ties.length
-            ? 'empate em ' + ties.join(', ') + '. '
+            ? 'Empate em ' + ties.join(', ') + '. '
             : '') +
           (missing.length
-            ? 'sem vencedor com votos e ID Discord em ' +
+            ? 'Sem vencedor válido em ' +
               missing.join(', ') + '.'
             : '')
       });
     }
 
-    // WEBHOOK DISCORD CORRIGIDO
+    // ========================================
+    // DISCORD WEBHOOK - HTTP 400 CORRIGIDO
+    // ========================================
+
     const url = String(
       process.env.DISCORD_GOVERNMENT_WEBHOOK_URL || ''
     ).trim();
@@ -750,17 +800,19 @@ export default async function handler(req, res) {
       });
     }
 
-    const safe = value =>
+    const clean = value =>
       String(value ?? '')
         .replace(/[@`*_~|>]/g, '')
         .slice(0, 120);
 
-    const lines = winners.map(w =>
-      `**${LABELS[w.office]}**\n` +
-      `<@${w.discord_id}> — **${safe(w.name)}** ` +
-      `(n.º ${safe(w.number)})\n` +
-      `**${w.votes} voto(s)**`
-    );
+    const lines = winners.map(w => {
+      return (
+        `**${LABELS[w.office]}**\n` +
+        `<@${w.discord_id}> — **${clean(w.name)}** ` +
+        `(n.º ${clean(w.number)})\n` +
+        `**${w.votes} voto(s)**`
+      );
+    });
 
     const description =
       `**Resultado oficial da eleição #${state.round}**\n\n` +
@@ -768,28 +820,27 @@ export default async function handler(req, res) {
 
     if (description.length > 4096) {
       return res.status(409).json({
-        error: 'O anúncio ultrapassa os 4096 caracteres permitidos pelo Discord.'
+        error: 'O anúncio excede o limite de caracteres do Discord.'
       });
     }
 
     const payload = {
       username: 'MetroVile - Comissão Eleitoral',
-      embeds: [{
-        title: 'NOVO GOVERNO DE METROVILE',
-        description,
-        color: 3447003,
-        footer: {
-          text: 'MetroVile RP - Sistema eleitoral fictício'
-        },
-        timestamp: new Date().toISOString()
-      }],
+      embeds: [
+        {
+          title: 'NOVO GOVERNO DE METROVILE',
+          description,
+          color: 3447003,
+          footer: {
+            text: 'MetroVile RP - Sistema eleitoral fictício'
+          },
+          timestamp: new Date().toISOString()
+        }
+      ],
+
+      // CORREÇÃO DO ERRO HTTP 400
       allowed_mentions: {
-        parse: [],
-        users: [
-          ...new Set(
-            winners.map(w => String(w.discord_id))
-          )
-        ]
+        parse: ['users']
       }
     };
 
@@ -804,12 +855,11 @@ export default async function handler(req, res) {
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(10000)
       });
-
-    } catch (err) {
-      console.error('Discord webhook network:', err);
+    } catch (e) {
+      console.error('Discord webhook network:', e);
 
       return res.status(502).json({
-        error: 'Não foi possível contactar o Discord. Confirma o estado da mensagem no canal antes de tentar novamente.'
+        error: 'Falha de comunicação com o Discord. Verifica se o anúncio foi publicado antes de tentar novamente.'
       });
     }
 
@@ -832,34 +882,40 @@ export default async function handler(req, res) {
       } catch {}
 
       return res.status(502).json({
-        error: `Discord HTTP ${response.status}: ${discordMessage}`
+        error:
+          `Discord HTTP ${response.status}: ${discordMessage}`
       });
     }
 
+    // ========================================
     // ARQUIVAR RESULTADOS
-    await client.query(
-      `INSERT INTO election_history
-       (election_number,results)
-       VALUES ($1,$2::jsonb)`,
-      [
-        state.round,
-        JSON.stringify({
-          winners,
-          candidates: result.rows
-        })
-      ]
-    );
+    // ========================================
 
+    await client.query(`
+      INSERT INTO election_history
+      (election_number,results)
+      VALUES($1,$2::jsonb)
+    `, [
+      state.round,
+      JSON.stringify({
+        winners,
+        candidates: result.rows
+      })
+    ]);
+
+    // ========================================
     // PREPARAR PRÓXIMA ELEIÇÃO
+    // ========================================
+
     await client.query('DELETE FROM votes');
 
-    await client.query(
-      `UPDATE election_state
-       SET round=round+1,
-           announced_at=NULL,
-           voting_open=FALSE
-       WHERE id=1`
-    );
+    await client.query(`
+      UPDATE election_state
+      SET round=round+1,
+          announced_at=NULL,
+          voting_open=FALSE
+      WHERE id=1
+    `);
 
     await client.query('COMMIT');
     transaction = false;
@@ -880,7 +936,7 @@ export default async function handler(req, res) {
     console.error('Election management:', e);
 
     return res.status(500).json({
-      error: 'Erro ao gerir eleição. Verifica os logs.'
+      error: 'Erro ao gerir eleição. Verifica os logs do Vercel.'
     });
 
   } finally {
